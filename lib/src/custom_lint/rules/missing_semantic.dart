@@ -12,6 +12,7 @@ class MissingSemantic extends DartLintRule {
             problemMessage: 'Semantic label is missing for this widget.',
             correctionMessage:
                 'Wrap with a Semantics widget or add a semanticLabel.',
+            errorSeverity: ErrorSeverity.INFO,
           ),
         );
 
@@ -25,19 +26,30 @@ class MissingSemantic extends DartLintRule {
       final constructorType = node.constructorName.type;
       final constructorName = constructorType.name2.lexeme;
 
-      // List of widgets that should have semantic labels
       final widgetsRequiringSemantics = {'Text', 'Image', 'Icon'};
 
-      if (widgetsRequiringSemantics.contains(constructorName)) {
-        // Check if the widget has a `semanticLabel` argument
-        final hasSemanticLabel = node.argumentList.arguments.any((arg) {
-          return arg is NamedExpression &&
-              arg.name.label.name == 'semanticLabel';
-        });
+      if (!widgetsRequiringSemantics.contains(constructorName)) return;
 
-        if (!hasSemanticLabel) {
+      final hasSemanticLabel = node.argumentList.arguments.any((arg) {
+        return arg is NamedExpression && arg.name.label.name == 'semanticLabel';
+      });
+
+      if (hasSemanticLabel) return;
+
+      if (constructorName == 'Text') {
+        final textArgument =
+            node.argumentList.arguments.whereType<StringLiteral>().firstOrNull;
+        final containsVariable =
+            node.argumentList.arguments.any((arg) => arg is! StringLiteral);
+
+        if (containsVariable && hasSemanticLabel) return;
+
+        final textLength = textArgument?.stringValue?.length ?? 0;
+        if (textLength > 15) {
           reporter.atNode(node, code);
         }
+      } else {
+        reporter.atNode(node, code);
       }
     });
   }
@@ -59,14 +71,39 @@ class _AddSemanticWrapperFix extends DartFix {
       if (!analysisError.sourceRange.intersects(node.sourceRange)) return;
 
       final changeBuilder = reporter.createChangeBuilder(
-        message: 'Wrap with Semantics widget',
+        message: 'Add semanticLabel or wrap with Semantics widget',
         priority: 1,
       );
 
       changeBuilder.addDartFileEdit((builder) {
         final originalCode = node.toSource();
-        final wrappedCode =
-            'Semantics(label: "Describe this", child: $originalCode)';
+        final constructorType = node.constructorName.type;
+
+        final constructorName = constructorType.name2.lexeme;
+
+        final widgetsSupportingSemanticLabel = {'Text', 'Image', 'Icon'};
+
+        if (widgetsSupportingSemanticLabel.contains(constructorName)) {
+          final alreadyHasLabel = node.argumentList.arguments.any((arg) {
+            return arg is NamedExpression &&
+                arg.name.label.name == 'semanticLabel';
+          });
+
+          if (!alreadyHasLabel) {
+            final updatedCode = originalCode.replaceFirst(
+                '(', '(semanticLabel: "Describe this", ');
+
+            builder.addSimpleReplacement(
+              SourceRange(node.offset, node.length),
+              updatedCode,
+            );
+          }
+          return;
+        }
+
+        final wrappedCode = originalCode.startsWith('Semantics(')
+            ? originalCode
+            : 'Semantics(label: "Describe this", child: $originalCode)';
 
         builder.addSimpleReplacement(
           SourceRange(node.offset, node.length),
