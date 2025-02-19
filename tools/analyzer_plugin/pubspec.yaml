@@ -1,0 +1,11 @@
+name: missing_semantic_plugin
+description: A plugin loader
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  custom_linter_example:
+    path: /Users/aghny/Repositories/aghny.dev/custom_linter_example
