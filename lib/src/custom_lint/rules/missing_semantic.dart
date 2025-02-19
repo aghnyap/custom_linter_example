@@ -22,17 +22,20 @@ class MissingSemantic extends DartLintRule {
     CustomLintContext context,
   ) {
     context.registry.addInstanceCreationExpression((node) {
-      final constructorName = node.constructorName.type.toString();
+      final constructorType = node.constructorName.type;
+      final constructorName = constructorType.name2.lexeme;
 
       // List of widgets that should have semantic labels
       final widgetsRequiringSemantics = {'Text', 'Image', 'Icon'};
 
       if (widgetsRequiringSemantics.contains(constructorName)) {
-        final hasSemanticParent = node.parent is NamedExpression &&
-            (node.parent as NamedExpression).name.label.name ==
-                'semanticsLabel';
+        // Check if the widget has a `semanticLabel` argument
+        final hasSemanticLabel = node.argumentList.arguments.any((arg) {
+          return arg is NamedExpression &&
+              arg.name.label.name == 'semanticLabel';
+        });
 
-        if (!hasSemanticParent) {
+        if (!hasSemanticLabel) {
           reporter.atNode(node, code);
         }
       }
